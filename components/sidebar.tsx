@@ -1,7 +1,7 @@
 "use client"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { CheckCircle, Calendar, Users, AlertTriangle, X } from "lucide-react"
+import { CheckCircle, Calendar, Users, AlertTriangle, X, QrCode } from "lucide-react"
 
 interface SidebarProps {
   activeSection: string
@@ -20,6 +20,11 @@ const menuItems = [
     id: "schedule",
     label: "Schedule",
     icon: Calendar,
+  },
+  {
+    id: "attendance",
+    label: "Attendance",
+    icon: QrCode,
   },
   {
     id: "students",

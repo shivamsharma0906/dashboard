@@ -8,6 +8,7 @@ import { ApprovalsPage } from "@/components/pages/approvals-page"
 import { SchedulePage } from "@/components/pages/schedule-page"
 import { StudentsPage } from "@/components/pages/students-page"
 import { AlertsPage } from "@/components/pages/alerts-page"
+import { AttendancePage } from "@/components/pages/attendance-page"
 
 export default function TeacherDashboard() {
   const [activeSection, setActiveSection] = useState("approvals")
@@ -31,6 +32,8 @@ export default function TeacherDashboard() {
         return <ApprovalsPage />
       case "schedule":
         return <SchedulePage />
+      case "attendance":
+        return <AttendancePage />
       case "students":
         return <StudentsPage />
       case "alerts":

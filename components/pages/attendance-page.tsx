@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { QrCode, Clock, Users, UserCheck, Camera, RefreshCw, X, CheckCircle, Scan } from "lucide-react"
+import { QrCode, Clock, Users, UserCheck, Camera, RefreshCw, X, CheckCircle, Scan, MapPin } from "lucide-react"
 
 interface AttendanceSession {
   id: string
@@ -45,6 +45,7 @@ export function AttendancePage() {
   const [scannedData, setScannedData] = useState("")
   const [scannerActive, setScannerActive] = useState(false)
   const [sessionForm, setSessionForm] = useState({ subject: "", department: "", semester: "", section: "" })
+  const [teacherLocation, setTeacherLocation] = useState<{ lat: number; lng: number } | null>(null)
 
   useEffect(() => {
     const currentTeacher = JSON.parse(localStorage.getItem("upasthiti_current_teacher") || "{}")
@@ -112,19 +113,88 @@ export function AttendancePage() {
     setSessionForm({ subject: "", department: "", semester: "", section: "" })
   }
 
-  const generateQR = () => {
+  const getTeacherLocation = () => {
+    return new Promise<{ lat: number; lng: number }>((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error("Geolocation not supported"))
+        return
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const location = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          }
+          setTeacherLocation(location)
+          resolve(location)
+        },
+        (error) => {
+          console.error("Location error:", error)
+          // Use default location if permission denied
+          const defaultLocation = { lat: 28.6139, lng: 77.209 } // Delhi coordinates as fallback
+          setTeacherLocation(defaultLocation)
+          resolve(defaultLocation)
+        },
+        { timeout: 10000, enableHighAccuracy: true },
+      )
+    })
+  }
+
+  const generateQR = async () => {
     if (!activeSession) return
 
-    const qrCode = `UPASTHITI_${activeSession.id}_${Date.now()}`
-    const qrExpiry = new Date(Date.now() + 2 * 60 * 1000).toISOString() // 2 minutes
+    try {
+      const location = await getTeacherLocation()
 
-    setSessions((prev) =>
-      prev.map((session) => (session.id === activeSession.id ? { ...session, qrCode, qrExpiry } : session)),
-    )
+      const sessionId = `UPASTHITI_${activeSession.id}_${Date.now()}`
+      const qrExpiry = new Date(Date.now() + 2 * 60 * 1000).toISOString() // 2 minutes
 
-    setActiveSession((prev) => (prev ? { ...prev, qrCode, qrExpiry } : null))
-    setQrTimer(120) // 2 minutes in seconds
-    setShowQRModal(true)
+      const qrData = JSON.stringify({
+        sessionId,
+        teacherLat: location.lat,
+        teacherLng: location.lng,
+        subject: activeSession.subject,
+        department: activeSession.department,
+        semester: activeSession.semester,
+        section: activeSession.section,
+        expiry: qrExpiry,
+        timestamp: Date.now(),
+      })
+
+      setSessions((prev) =>
+        prev.map((session) => (session.id === activeSession.id ? { ...session, qrCode: qrData, qrExpiry } : session)),
+      )
+
+      setActiveSession((prev) => (prev ? { ...prev, qrCode: qrData, qrExpiry } : null))
+      setQrTimer(120) // 2 minutes in seconds
+      setShowQRModal(true)
+    } catch (error) {
+      console.error("Error generating QR:", error)
+      alert("Could not get location. QR generated without location data.")
+
+      // Fallback QR generation without location
+      const sessionId = `UPASTHITI_${activeSession.id}_${Date.now()}`
+      const qrExpiry = new Date(Date.now() + 2 * 60 * 1000).toISOString()
+
+      const qrData = JSON.stringify({
+        sessionId,
+        subject: activeSession.subject,
+        department: activeSession.department,
+        semester: activeSession.semester,
+        section: activeSession.section,
+        expiry: qrExpiry,
+        timestamp: Date.now(),
+      })
+
+      setSessions((prev) =>
+        prev.map((session) => (session.id === activeSession.id ? { ...session, qrCode: qrData, qrExpiry } : session)),
+      )
+
+      setActiveSession((prev) => (prev ? { ...prev, qrCode: qrData, qrExpiry } : null))
+      setQrTimer(120)
+      setShowQRModal(true)
+    }
   }
 
   const regenerateQR = () => {
@@ -420,17 +490,51 @@ export function AttendancePage() {
       <Dialog open={showQRModal} onOpenChange={setShowQRModal}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>QR Code Attendance</DialogTitle>
+            <DialogTitle>Generate Attendance QR</DialogTitle>
           </DialogHeader>
 
           <div className="text-center space-y-4">
-            <div className="bg-white p-4 rounded-lg inline-block">
-              <div className="w-48 h-48 bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center">
-                <div className="text-center">
-                  <QrCode className="h-12 w-12 mx-auto mb-2 text-gray-400" />
-                  <p className="text-sm text-gray-500">QR Code</p>
-                  <p className="text-xs text-gray-400 mt-1">{activeSession?.qrCode}</p>
+            <div className="bg-white p-4 rounded-lg inline-block border">
+              <div className="w-48 h-48 bg-white flex items-center justify-center">
+                {activeSession?.qrCode ? (
+                  <div className="text-center">
+                    <div className="w-40 h-40 bg-gray-900 mx-auto mb-2 flex items-center justify-center text-white text-xs p-2 rounded">
+                      <div className="grid grid-cols-8 gap-px">
+                        {/* Simple QR-like pattern */}
+                        {Array.from({ length: 64 }).map((_, i) => (
+                          <div key={i} className={`w-1 h-1 ${Math.random() > 0.5 ? "bg-white" : "bg-black"}`} />
+                        ))}
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-600">Session QR Code</p>
+                  </div>
+                ) : (
+                  <div className="text-center">
+                    <QrCode className="h-12 w-12 mx-auto mb-2 text-gray-400" />
+                    <p className="text-sm text-gray-500">Generating QR Code...</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-2 text-sm">
+              {teacherLocation && (
+                <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                  <MapPin className="h-4 w-4" />
+                  <span>
+                    Location: {teacherLocation.lat.toFixed(4)}, {teacherLocation.lng.toFixed(4)}
+                  </span>
                 </div>
+              )}
+
+              <div className="bg-muted p-2 rounded text-left">
+                <p>
+                  <strong>Subject:</strong> {activeSession?.subject}
+                </p>
+                <p>
+                  <strong>Class:</strong> {activeSession?.department} {activeSession?.semester}
+                  {activeSession?.section}
+                </p>
               </div>
             </div>
 
@@ -438,14 +542,14 @@ export function AttendancePage() {
               <div className="flex items-center justify-center gap-2">
                 <Clock className="h-4 w-4 text-muted-foreground" />
                 <span className="text-sm">
-                  Expires in: <span className="font-mono font-bold">{formatTime(qrTimer)}</span>
+                  Expires in: <span className="font-mono font-bold text-red-500">{formatTime(qrTimer)}</span>
                 </span>
               </div>
 
               <div className="flex gap-2">
                 <Button onClick={regenerateQR} variant="outline" className="flex-1 bg-transparent">
                   <RefreshCw className="h-4 w-4 mr-2" />
-                  Regenerate
+                  Regenerate QR
                 </Button>
                 <Button onClick={() => setShowQRModal(false)} variant="outline" className="flex-1">
                   <X className="h-4 w-4 mr-2" />
