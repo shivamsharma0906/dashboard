@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -15,60 +15,88 @@ interface StudentRequest {
   year: string
   requestDate: string
   status: "pending" | "approved" | "declined"
+  email: string
 }
 
-// Mock data for student approval requests
-const mockRequests: StudentRequest[] = [
+const getInitialRequests = (): StudentRequest[] => [
   {
     id: "1",
     name: "Arjun Sharma",
-    rollNo: "CS2021001",
-    department: "Computer Science",
-    year: "3rd Year",
+    rollNo: "CSE-2023-021",
+    department: "CSE",
+    year: "2nd Year",
     requestDate: "2024-01-15",
     status: "pending",
+    email: "arjun.sharma@student.edu",
   },
   {
     id: "2",
     name: "Priya Patel",
-    rollNo: "EC2022045",
-    department: "Electronics",
-    year: "2nd Year",
+    rollNo: "ECE-2024-014",
+    department: "ECE",
+    year: "1st Year",
     requestDate: "2024-01-14",
     status: "pending",
+    email: "priya.patel@student.edu",
   },
   {
     id: "3",
     name: "Rahul Kumar",
-    rollNo: "ME2021078",
-    department: "Mechanical",
+    rollNo: "ME-2022-007",
+    department: "ME",
     year: "3rd Year",
     requestDate: "2024-01-13",
     status: "pending",
+    email: "rahul.kumar@student.edu",
   },
   {
     id: "4",
     name: "Sneha Gupta",
-    rollNo: "CS2023012",
-    department: "Computer Science",
-    year: "1st Year",
+    rollNo: "CSE-2023-045",
+    department: "CSE",
+    year: "2nd Year",
     requestDate: "2024-01-12",
     status: "pending",
+    email: "sneha.gupta@student.edu",
   },
   {
     id: "5",
     name: "Vikram Singh",
-    rollNo: "EE2022033",
-    department: "Electrical",
+    rollNo: "EE-2023-033",
+    department: "EE",
     year: "2nd Year",
     requestDate: "2024-01-11",
     status: "pending",
+    email: "vikram.singh@student.edu",
   },
 ]
 
 export function ApprovalsPage() {
-  const [requests, setRequests] = useState<StudentRequest[]>(mockRequests)
+  const [requests, setRequests] = useState<StudentRequest[]>([])
   const [processingId, setProcessingId] = useState<string | null>(null)
+
+  useEffect(() => {
+    const currentTeacher = JSON.parse(localStorage.getItem("upasthiti_current_teacher") || "{}")
+    const teacherId = currentTeacher.email || "default"
+
+    const savedRequests = localStorage.getItem(`upasthiti_requests_${teacherId}`)
+    if (savedRequests) {
+      setRequests(JSON.parse(savedRequests))
+    } else {
+      // Initialize with default data for new teachers
+      const initialRequests = getInitialRequests()
+      setRequests(initialRequests)
+      localStorage.setItem(`upasthiti_requests_${teacherId}`, JSON.stringify(initialRequests))
+    }
+  }, [])
+
+  useEffect(() => {
+    if (requests.length > 0) {
+      const currentTeacher = JSON.parse(localStorage.getItem("upasthiti_current_teacher") || "{}")
+      const teacherId = currentTeacher.email || "default"
+      localStorage.setItem(`upasthiti_requests_${teacherId}`, JSON.stringify(requests))
+    }
+  }, [requests])
 
   const handleApproval = async (id: string, action: "approved" | "declined") => {
     setProcessingId(id)
@@ -76,7 +104,43 @@ export function ApprovalsPage() {
     // Simulate API call delay
     await new Promise((resolve) => setTimeout(resolve, 1000))
 
-    setRequests((prev) => prev.map((request) => (request.id === id ? { ...request, status: action } : request)))
+    setRequests((prev) => {
+      const updatedRequests = prev.map((request) => (request.id === id ? { ...request, status: action } : request))
+
+      if (action === "approved") {
+        const approvedStudent = updatedRequests.find((req) => req.id === id)
+        if (approvedStudent) {
+          const currentTeacher = JSON.parse(localStorage.getItem("upasthiti_current_teacher") || "{}")
+          const teacherId = currentTeacher.email || "default"
+
+          // Get existing students list
+          const existingStudents = JSON.parse(localStorage.getItem(`upasthiti_students_${teacherId}`) || "[]")
+
+          // Add new student if not already exists
+          const studentExists = existingStudents.some((student: any) => student.rollNo === approvedStudent.rollNo)
+          if (!studentExists) {
+            const newStudent = {
+              id: approvedStudent.id,
+              name: approvedStudent.name,
+              rollNo: approvedStudent.rollNo,
+              department: approvedStudent.department,
+              year: approvedStudent.year,
+              email: approvedStudent.email,
+              attendancePercentage: 0,
+              totalClasses: 0,
+              attendedClasses: 0,
+              status: "Active",
+              joinDate: new Date().toISOString().split("T")[0],
+            }
+
+            existingStudents.push(newStudent)
+            localStorage.setItem(`upasthiti_students_${teacherId}`, JSON.stringify(existingStudents))
+          }
+        }
+      }
+
+      return updatedRequests
+    })
 
     setProcessingId(null)
   }
@@ -109,16 +173,13 @@ export function ApprovalsPage() {
                         <User className="h-4 w-4 text-muted-foreground" />
                         <span className="font-medium text-foreground">{request.name}</span>
                       </div>
-                      <Badge variant="secondary" className="text-xs">
-                        {request.rollNo}
-                      </Badge>
                     </div>
                   </CardHeader>
 
                   <CardContent className="pt-0">
                     <div className="space-y-3">
-                      <div className="text-sm text-muted-foreground">
-                        <span className="font-medium">{request.department}</span> · {request.year}
+                      <div className="text-sm font-medium text-foreground">
+                        {request.department} • {request.year} • {request.rollNo}
                       </div>
 
                       <div className="text-xs text-muted-foreground">
@@ -183,10 +244,9 @@ export function ApprovalsPage() {
                         <User className="h-4 w-4 text-muted-foreground" />
                         <div>
                           <span className="font-medium text-foreground">{request.name}</span>
-                          <span className="text-sm text-muted-foreground ml-2">({request.rollNo})</span>
                         </div>
                         <div className="text-sm text-muted-foreground">
-                          {request.department} · {request.year}
+                          {request.department} • {request.year} • {request.rollNo}
                         </div>
                       </div>
 

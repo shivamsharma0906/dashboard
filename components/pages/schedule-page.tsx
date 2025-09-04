@@ -1,172 +1,29 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { ChevronLeft, ChevronRight, Clock, MapPin, Users } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Clock, Plus, Trash2, Calendar, Users, BookOpen } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface ClassSession {
   id: string
-  subject: string
-  class: string
-  room: string
-  time: string
-  duration: number // in minutes
-  students: number
-  type: "lecture" | "lab" | "tutorial"
-}
-
-interface DaySchedule {
   day: string
-  date: string
-  classes: ClassSession[]
+  startTime: string
+  endTime: string
+  department: string
+  semester: string
+  section: string
+  subject: string
+  duration: number // in months
+  createdDate: string
+  expiryDate: string
 }
-
-// Mock schedule data
-const mockSchedule: DaySchedule[] = [
-  {
-    day: "Monday",
-    date: "2024-01-15",
-    classes: [
-      {
-        id: "1",
-        subject: "Data Structures",
-        class: "CS-3A",
-        room: "Room 301",
-        time: "09:00",
-        duration: 60,
-        students: 45,
-        type: "lecture",
-      },
-      {
-        id: "2",
-        subject: "Database Systems",
-        class: "CS-3B",
-        room: "Lab 201",
-        time: "11:00",
-        duration: 120,
-        students: 30,
-        type: "lab",
-      },
-      {
-        id: "3",
-        subject: "Software Engineering",
-        class: "CS-4A",
-        room: "Room 205",
-        time: "14:00",
-        duration: 60,
-        students: 38,
-        type: "lecture",
-      },
-    ],
-  },
-  {
-    day: "Tuesday",
-    date: "2024-01-16",
-    classes: [
-      {
-        id: "4",
-        subject: "Computer Networks",
-        class: "CS-3A",
-        room: "Room 302",
-        time: "10:00",
-        duration: 60,
-        students: 45,
-        type: "lecture",
-      },
-      {
-        id: "5",
-        subject: "Web Development",
-        class: "CS-2B",
-        room: "Lab 101",
-        time: "13:00",
-        duration: 90,
-        students: 25,
-        type: "tutorial",
-      },
-    ],
-  },
-  {
-    day: "Wednesday",
-    date: "2024-01-17",
-    classes: [
-      {
-        id: "6",
-        subject: "Machine Learning",
-        class: "CS-4B",
-        room: "Room 401",
-        time: "09:30",
-        duration: 90,
-        students: 32,
-        type: "lecture",
-      },
-      {
-        id: "7",
-        subject: "Data Structures Lab",
-        class: "CS-3A",
-        room: "Lab 301",
-        time: "11:30",
-        duration: 120,
-        students: 22,
-        type: "lab",
-      },
-    ],
-  },
-  {
-    day: "Thursday",
-    date: "2024-01-18",
-    classes: [
-      {
-        id: "8",
-        subject: "Operating Systems",
-        class: "CS-3B",
-        room: "Room 203",
-        time: "10:30",
-        duration: 60,
-        students: 40,
-        type: "lecture",
-      },
-      {
-        id: "9",
-        subject: "Project Work",
-        class: "CS-4A",
-        room: "Lab 401",
-        time: "14:30",
-        duration: 120,
-        students: 15,
-        type: "tutorial",
-      },
-    ],
-  },
-  {
-    day: "Friday",
-    date: "2024-01-19",
-    classes: [
-      {
-        id: "10",
-        subject: "Algorithms",
-        class: "CS-3A",
-        room: "Room 301",
-        time: "09:00",
-        duration: 60,
-        students: 45,
-        type: "lecture",
-      },
-      {
-        id: "11",
-        subject: "System Design",
-        class: "CS-4B",
-        room: "Room 402",
-        time: "11:00",
-        duration: 90,
-        students: 28,
-        type: "lecture",
-      },
-    ],
-  },
-]
 
 const timeSlots = [
   "09:00",
@@ -188,140 +45,351 @@ const timeSlots = [
   "17:00",
 ]
 
+const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+
 export function SchedulePage() {
+  const [sessions, setSessions] = useState<ClassSession[]>([])
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [selectedSession, setSelectedSession] = useState<ClassSession | null>(null)
   const [currentWeek, setCurrentWeek] = useState(0)
 
-  const getTypeColor = (type: ClassSession["type"]) => {
-    switch (type) {
-      case "lecture":
-        return "bg-primary text-primary-foreground"
-      case "lab":
-        return "bg-accent text-accent-foreground"
-      case "tutorial":
-        return "bg-secondary text-secondary-foreground"
-      default:
-        return "bg-muted text-muted-foreground"
+  // Form state for creating new session
+  const [formData, setFormData] = useState({
+    day: "",
+    startTime: "",
+    endTime: "",
+    department: "",
+    semester: "",
+    section: "",
+    subject: "",
+    duration: "1",
+  })
+
+  useEffect(() => {
+    const currentTeacher = JSON.parse(localStorage.getItem("upasthiti_current_teacher") || "{}")
+    const teacherId = currentTeacher.email || "default"
+
+    const savedSessions = localStorage.getItem(`upasthiti_schedule_${teacherId}`)
+    if (savedSessions) {
+      setSessions(JSON.parse(savedSessions))
+    }
+  }, [])
+
+  useEffect(() => {
+    if (sessions.length >= 0) {
+      const currentTeacher = JSON.parse(localStorage.getItem("upasthiti_current_teacher") || "{}")
+      const teacherId = currentTeacher.email || "default"
+      localStorage.setItem(`upasthiti_schedule_${teacherId}`, JSON.stringify(sessions))
+    }
+  }, [sessions])
+
+  const handleCreateSession = () => {
+    if (
+      !formData.day ||
+      !formData.startTime ||
+      !formData.endTime ||
+      !formData.department ||
+      !formData.semester ||
+      !formData.section ||
+      !formData.subject
+    ) {
+      return
+    }
+
+    const createdDate = new Date()
+    const expiryDate = new Date()
+    expiryDate.setMonth(expiryDate.getMonth() + Number.parseInt(formData.duration))
+
+    const newSession: ClassSession = {
+      id: Date.now().toString(),
+      day: formData.day,
+      startTime: formData.startTime,
+      endTime: formData.endTime,
+      department: formData.department,
+      semester: formData.semester,
+      section: formData.section,
+      subject: formData.subject,
+      duration: Number.parseInt(formData.duration),
+      createdDate: createdDate.toISOString().split("T")[0],
+      expiryDate: expiryDate.toISOString().split("T")[0],
+    }
+
+    setSessions((prev) => [...prev, newSession])
+    setFormData({
+      day: "",
+      startTime: "",
+      endTime: "",
+      department: "",
+      semester: "",
+      section: "",
+      subject: "",
+      duration: "1",
+    })
+    setIsCreateModalOpen(false)
+  }
+
+  const handleClearRoutine = () => {
+    if (confirm("Are you sure you want to clear all scheduled sessions? This action cannot be undone.")) {
+      setSessions([])
     }
   }
 
-  const formatTime = (time: string, duration: number) => {
-    const [hours, minutes] = time.split(":").map(Number)
-    const startTime = new Date()
-    startTime.setHours(hours, minutes, 0, 0)
-
-    const endTime = new Date(startTime.getTime() + duration * 60000)
-
-    return `${time} - ${endTime.toTimeString().slice(0, 5)}`
+  const getSessionsForDay = (day: string) => {
+    return sessions.filter((session) => session.day === day).sort((a, b) => a.startTime.localeCompare(b.startTime))
   }
 
-  const getCurrentWeekDates = () => {
-    const today = new Date()
-    const monday = new Date(today)
-    monday.setDate(today.getDate() - today.getDay() + 1 + currentWeek * 7)
-
-    return mockSchedule.map((day, index) => {
-      const date = new Date(monday)
-      date.setDate(monday.getDate() + index)
-      return {
-        ...day,
-        date: date.toISOString().split("T")[0],
-      }
-    })
+  const isSessionExpired = (session: ClassSession) => {
+    return new Date(session.expiryDate) < new Date()
   }
 
-  const weekDates = getCurrentWeekDates()
+  const getSessionColor = (session: ClassSession) => {
+    if (isSessionExpired(session)) {
+      return "bg-muted text-muted-foreground border-muted"
+    }
+
+    const colors = [
+      "bg-primary/10 text-primary border-primary/20",
+      "bg-accent/10 text-accent-foreground border-accent/20",
+      "bg-secondary/10 text-secondary-foreground border-secondary/20",
+      "bg-blue-50 text-blue-700 border-blue-200",
+      "bg-green-50 text-green-700 border-green-200",
+      "bg-purple-50 text-purple-700 border-purple-200",
+    ]
+
+    return colors[Number.parseInt(session.id) % colors.length]
+  }
 
   return (
     <div>
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-foreground mb-2">Class Schedule</h2>
-        <p className="text-muted-foreground">Weekly class timetable view.</p>
-      </div>
-
-      {/* Week Navigation */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-4">
-          <Button variant="outline" size="sm" onClick={() => setCurrentWeek((prev) => prev - 1)}>
-            <ChevronLeft className="h-4 w-4" />
-            Previous Week
-          </Button>
-
-          <div className="text-sm font-medium text-foreground">
-            Week of{" "}
-            {new Date(weekDates[0].date).toLocaleDateString("en-IN", {
-              month: "long",
-              day: "numeric",
-              year: "numeric",
-            })}
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-foreground mb-2">Class Schedule</h2>
+            <p className="text-muted-foreground">Create and manage your weekly class timetable.</p>
           </div>
 
-          <Button variant="outline" size="sm" onClick={() => setCurrentWeek((prev) => prev + 1)}>
-            Next Week
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
+          <div className="flex gap-2">
+            <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
+              <DialogTrigger asChild>
+                <Button className="flex items-center gap-2">
+                  <Plus className="h-4 w-4" />
+                  Create Session
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Create New Class Session</DialogTitle>
+                </DialogHeader>
 
-        <Button variant="secondary" size="sm" onClick={() => setCurrentWeek(0)}>
-          Current Week
-        </Button>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="day">Day</Label>
+                      <Select
+                        value={formData.day}
+                        onValueChange={(value) => setFormData((prev) => ({ ...prev, day: value }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select day" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {days.map((day) => (
+                            <SelectItem key={day} value={day}>
+                              {day}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="duration">Duration (Months)</Label>
+                      <Select
+                        value={formData.duration}
+                        onValueChange={(value) => setFormData((prev) => ({ ...prev, duration: value }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {[1, 2, 3, 4, 5, 6].map((month) => (
+                            <SelectItem key={month} value={month.toString()}>
+                              {month} Month{month > 1 ? "s" : ""}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="startTime">Start Time</Label>
+                      <Select
+                        value={formData.startTime}
+                        onValueChange={(value) => setFormData((prev) => ({ ...prev, startTime: value }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Start time" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {timeSlots.map((time) => (
+                            <SelectItem key={time} value={time}>
+                              {time}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="endTime">End Time</Label>
+                      <Select
+                        value={formData.endTime}
+                        onValueChange={(value) => setFormData((prev) => ({ ...prev, endTime: value }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="End time" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {timeSlots.map((time) => (
+                            <SelectItem key={time} value={time}>
+                              {time}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <Label htmlFor="department">Department</Label>
+                      <Select
+                        value={formData.department}
+                        onValueChange={(value) => setFormData((prev) => ({ ...prev, department: value }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Dept" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="CSE">CSE</SelectItem>
+                          <SelectItem value="ECE">ECE</SelectItem>
+                          <SelectItem value="ME">ME</SelectItem>
+                          <SelectItem value="EE">EE</SelectItem>
+                          <SelectItem value="CE">CE</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="semester">Semester</Label>
+                      <Select
+                        value={formData.semester}
+                        onValueChange={(value) => setFormData((prev) => ({ ...prev, semester: value }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Sem" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {[1, 2, 3, 4, 5, 6, 7, 8].map((sem) => (
+                            <SelectItem key={sem} value={sem.toString()}>
+                              {sem}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="section">Section</Label>
+                      <Select
+                        value={formData.section}
+                        onValueChange={(value) => setFormData((prev) => ({ ...prev, section: value }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Sec" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="A">A</SelectItem>
+                          <SelectItem value="B">B</SelectItem>
+                          <SelectItem value="C">C</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="subject">Subject</Label>
+                    <Input
+                      id="subject"
+                      value={formData.subject}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, subject: e.target.value }))}
+                      placeholder="Enter subject name"
+                    />
+                  </div>
+
+                  <Button onClick={handleCreateSession} className="w-full">
+                    Create Session
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            <Button variant="destructive" onClick={handleClearRoutine} className="flex items-center gap-2">
+              <Trash2 className="h-4 w-4" />
+              Clear Routine
+            </Button>
+          </div>
+        </div>
       </div>
 
       {/* Schedule Grid */}
-      <div className="grid gap-4 lg:grid-cols-5">
-        {weekDates.map((daySchedule) => (
-          <Card key={daySchedule.day} className="h-fit">
+      <div className="grid gap-4 lg:grid-cols-6">
+        {days.map((day) => (
+          <Card key={day} className="h-fit">
             <CardHeader className="pb-3">
-              <div className="text-center">
-                <h3 className="font-semibold text-foreground">{daySchedule.day}</h3>
-                <p className="text-sm text-muted-foreground">
-                  {new Date(daySchedule.date).toLocaleDateString("en-IN", {
-                    month: "short",
-                    day: "numeric",
-                  })}
-                </p>
-              </div>
+              <CardTitle className="text-center text-lg">{day}</CardTitle>
             </CardHeader>
 
             <CardContent className="pt-0">
-              <div className="space-y-3">
-                {daySchedule.classes.length > 0 ? (
-                  daySchedule.classes.map((classSession) => (
-                    <Card key={classSession.id} className="border-l-4 border-l-primary">
+              <div className="space-y-2 min-h-[200px]">
+                {getSessionsForDay(day).length > 0 ? (
+                  getSessionsForDay(day).map((session) => (
+                    <Card
+                      key={session.id}
+                      className={cn(
+                        "cursor-pointer transition-all duration-200 hover:shadow-md border-l-4",
+                        getSessionColor(session),
+                      )}
+                      onClick={() => setSelectedSession(session)}
+                    >
                       <CardContent className="p-3">
-                        <div className="space-y-2">
-                          <div className="flex items-start justify-between">
-                            <h4 className="font-medium text-sm text-foreground leading-tight">
-                              {classSession.subject}
-                            </h4>
-                            <Badge variant="secondary" className={cn("text-xs", getTypeColor(classSession.type))}>
-                              {classSession.type}
+                        <div className="space-y-1">
+                          <div className="font-medium text-sm leading-tight">{session.subject}</div>
+
+                          <div className="text-xs opacity-80">
+                            {session.startTime} - {session.endTime}
+                          </div>
+
+                          <div className="text-xs opacity-70">
+                            {session.department}-{session.semester}
+                            {session.section}
+                          </div>
+
+                          {isSessionExpired(session) && (
+                            <Badge variant="secondary" className="text-xs">
+                              Expired
                             </Badge>
-                          </div>
-
-                          <div className="space-y-1 text-xs text-muted-foreground">
-                            <div className="flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
-                              {formatTime(classSession.time, classSession.duration)}
-                            </div>
-
-                            <div className="flex items-center gap-1">
-                              <MapPin className="h-3 w-3" />
-                              {classSession.room}
-                            </div>
-
-                            <div className="flex items-center gap-1">
-                              <Users className="h-3 w-3" />
-                              {classSession.class} ({classSession.students} students)
-                            </div>
-                          </div>
+                          )}
                         </div>
                       </CardContent>
                     </Card>
                   ))
                 ) : (
                   <div className="text-center py-8 text-muted-foreground">
-                    <Clock className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p className="text-sm">No classes scheduled</p>
+                    <Calendar className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">No classes</p>
                   </div>
                 )}
               </div>
@@ -330,59 +398,125 @@ export function SchedulePage() {
         ))}
       </div>
 
+      {/* Session Details Modal */}
+      {selectedSession && (
+        <Dialog open={!!selectedSession} onOpenChange={() => setSelectedSession(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Class Session Details</DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Subject</Label>
+                  <p className="text-lg font-semibold">{selectedSession.subject}</p>
+                </div>
+
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Time</Label>
+                  <p className="text-lg">
+                    {selectedSession.startTime} - {selectedSession.endTime}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Department</Label>
+                  <p>{selectedSession.department}</p>
+                </div>
+
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Semester</Label>
+                  <p>{selectedSession.semester}</p>
+                </div>
+
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Section</Label>
+                  <p>{selectedSession.section}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Duration</Label>
+                  <p>
+                    {selectedSession.duration} month{selectedSession.duration > 1 ? "s" : ""}
+                  </p>
+                </div>
+
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Expires On</Label>
+                  <p className={cn(isSessionExpired(selectedSession) ? "text-destructive" : "text-foreground")}>
+                    {new Date(selectedSession.expiryDate).toLocaleDateString("en-IN")}
+                  </p>
+                </div>
+              </div>
+
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  setSessions((prev) => prev.filter((s) => s.id !== selectedSession.id))
+                  setSelectedSession(null)
+                }}
+                className="w-full"
+              >
+                Delete Session
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
       {/* Summary Stats */}
-      <div className="mt-8 grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-lg">
-                <Clock className="h-5 w-5 text-primary" />
+      {sessions.length > 0 && (
+        <div className="mt-8 grid gap-4 md:grid-cols-3">
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-primary/10 rounded-lg">
+                  <BookOpen className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Total Sessions</p>
+                  <p className="text-xl font-bold text-foreground">{sessions.length}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Total Classes</p>
-                <p className="text-xl font-bold text-foreground">
-                  {weekDates.reduce((total, day) => total + day.classes.length, 0)}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-accent/10 rounded-lg">
-                <Users className="h-5 w-5 text-accent" />
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-accent/10 rounded-lg">
+                  <Clock className="h-5 w-5 text-accent" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Active Sessions</p>
+                  <p className="text-xl font-bold text-foreground">
+                    {sessions.filter((s) => !isSessionExpired(s)).length}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Total Students</p>
-                <p className="text-xl font-bold text-foreground">
-                  {weekDates.reduce(
-                    (total, day) => total + day.classes.reduce((dayTotal, cls) => dayTotal + cls.students, 0),
-                    0,
-                  )}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-secondary/10 rounded-lg">
-                <MapPin className="h-5 w-5 text-secondary" />
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-secondary/10 rounded-lg">
+                  <Users className="h-5 w-5 text-secondary" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Departments</p>
+                  <p className="text-xl font-bold text-foreground">{new Set(sessions.map((s) => s.department)).size}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Active Rooms</p>
-                <p className="text-xl font-bold text-foreground">
-                  {new Set(weekDates.flatMap((day) => day.classes.map((cls) => cls.room))).size}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   )
 }
